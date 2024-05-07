@@ -1,0 +1,111 @@
+# ## Nguyễn Phúc Tiền - 20110573
+# ## Last Edit: 07/03/2024
+
+# import tensorflow as tf
+# from keras.datasets import fashion_mnist
+# from keras.models import Model
+# from keras.layers import Dense, Flatten, BatchNormalization,RandomFlip, RandomRotation
+# from keras.applications import ResNet50
+
+# # Load the data
+# (x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
+
+# # Normalize the data
+# x_train, x_test = x_train / 255.0, x_test / 255.0
+
+# # Add a random flip and rotation layer to augment the data
+# data_augmentation = tf.keras.Sequential([
+#   RandomFlip('horizontal'),
+#   RandomRotation(0.1),
+# ])
+
+# # Apply the data augmentation to the training data
+# x_train = data_augmentation(x_train)
+
+# # Reshape the data for the pre-trained model
+# x_train = x_train.reshape((x_train.shape[0], 28, 28, 1))
+# x_test = x_test.reshape((x_test.shape[0], 28, 28, 1))
+
+# # Define the pre-trained model (Model A)
+# base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(28, 28, 1))
+
+# # Freeze the layers of the pre-trained model
+# base_model.trainable = False
+
+# # Define the new model (Model B)
+# inputs = tf.keras.Input(shape=(28, 28, 1))
+# x = base_model(inputs)
+# x = BatchNormalization()(x)
+# x = tf.keras.layers.GlobalAveragePooling2D()(x)
+# x = Dense(128, activation='relu')(x)
+# outputs = Dense(10, activation='softmax')(x)
+
+# # Create the new model
+# model = Model(inputs=inputs, outputs=outputs)
+
+# # Compile the model
+# model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+# # Train the model
+# model.fit(x_train, y_train, epochs=10, batch_size=32, validation_data=(x_test, y_test))
+
+# # Evaluate the model
+# loss, accuracy = model.evaluate(x_test, y_test)
+# print('Test accuracy:', accuracy)
+import tensorflow as tf
+from keras.datasets import fashion_mnist
+from keras.models import Model
+from keras.layers import Dense, Flatten, BatchNormalization, RandomFlip, RandomRotation
+from keras.applications import ResNet50
+import numpy as np
+
+# Load the data
+(x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
+
+# Normalize the data
+x_train, x_test = x_train / 255.0, x_test / 255.0
+
+# Add a random flip and rotation layer to augment the data
+data_augmentation = tf.keras.Sequential([
+  RandomFlip('horizontal'),
+  RandomRotation(0.1),
+])
+
+# Apply the data augmentation to the training data
+x_train = data_augmentation(x_train[..., tf.newaxis])
+
+# Repeat the first channel twice to create a 3-channel input
+x_train = tf.repeat(x_train, 3, axis=-1)
+x_test = tf.repeat(x_test, 3, axis=-1)
+
+# Reshape the data for the pre-trained model
+x_train = np.array([tf.compat.v1.image.resize_bilinear(image[tf.newaxis, ...], (32, 32)) for image in x_train])
+x_test = np.array([tf.compat.v1.image.resize_bilinear(image[tf.newaxis, ...], (32, 32)) for image in x_test])
+
+# Remove the extra dimension added by tf.newaxis
+x_train = tf.squeeze(x_train, axis=1)
+x_test = tf.squeeze(x_test, axis=1)
+# Define the pre-trained model (Model A)
+base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(32, 32, 3))
+
+# Freeze the layers of the pre-trained model
+base_model.trainable = False
+
+# Define the new model (Model B)
+inputs = tf.keras.Input(shape=(32, 32, 3))
+x = base_model(inputs)
+x = BatchNormalization()(x)
+x = tf.keras.layers.GlobalAveragePooling2D()(x)
+x = Dense(128, activation='relu')(x)
+outputs = Dense(10, activation='softmax')(x)
+
+# Compile the model
+model = Model(inputs=inputs, outputs=outputs)
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+# Train the model
+model.fit(x_train, y_train, epochs=10, batch_size=32, validation_data=(x_test, y_test))
+
+# Evaluate the model
+loss, accuracy = model.evaluate(x_test, y_test)
+print('Test accuracy:', accuracy)
